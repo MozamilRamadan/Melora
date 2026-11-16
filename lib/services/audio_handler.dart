@@ -16,6 +16,8 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
 
   bool shuffleEnabled = false;
   int repeatMode = 0;
+  Duration get currentPosition => _player.position;
+
 
   MeloraAudioHandler() {
     _player.playbackEventStream.listen((event) {
@@ -49,6 +51,7 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
     String? title,
     String? artist,
     Uint8List? artwork,
+    bool autoPlay = true,
   }) async {
     Uri? artworkUri;
 

@@ -3,7 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-
+import 'package:music_player/services/playback_storage_service.dart';
 import 'package:music_player/core/theme/app_style.dart';
 import 'package:music_player/data/models/song_model.dart';
 import 'package:music_player/services/music_scanner_service.dart';
@@ -25,7 +25,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MusicScannerService _musicScanner = MusicScannerService();
+  final PlaybackStorageService _storage =
+      PlaybackStorageService();
 
+  Timer? _playbackSaveTimer;
   late final AudioPlayerService _audioPlayer;
 
   final ValueNotifier<SongModel?> _currentSong = ValueNotifier(null);
@@ -79,6 +82,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _audioPlayer.handler.onRepeat = () async {
       _toggleRepeat();
     };
+
+    _playbackSaveTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _savePlaybackState(),
+    );
 
   }
 
@@ -294,6 +302,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
+  Future<void> _savePlaybackState() async {
+    if (_currentSongId == null || _playQueue.isEmpty) {
+      return;
+    }
+
+    await _storage.savePlaybackState(
+      songId: _currentSongId,
+      position: _audioPlayer.currentPosition.inMilliseconds,
+      queue: _playQueue.map((song) => song.id).toList(),
+      shuffleEnabled: _shuffleEnabled,
+      repeatMode: _repeatMode,
+    );
+  }
+
+
   @override
   void dispose() {
     _playerStateSubscription?.cancel();
@@ -303,9 +327,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _audioPlayer.handler.onShuffle = null;
     _audioPlayer.handler.onRepeat = null;
-    
+
     _audioPlayer.dispose();
     _currentSong.dispose();
+    _playbackSaveTimer?.cancel();
+    unawaited(_savePlaybackState());
     super.dispose();
   }
 

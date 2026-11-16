@@ -6,20 +6,40 @@ import 'dart:typed_data';
 
 class AudioPlayerService {
   final MeloraAudioHandler handler;
-
+  Duration get currentPosition => handler.currentPosition;
   AudioPlayerService(this.handler);
 
-  Future<void> play(
+  Future<void> restoreSong(
     String path, {
     String? title,
     String? artist,
     Uint8List? artwork,
+    required Duration position,
   }) async {
     await handler.playFromPath(
       path,
       title: title,
       artist: artist,
       artwork: artwork,
+      autoPlay: false,
+    );
+
+    await handler.seek(position);
+  }
+  
+  Future<void> play(
+    String path, {
+    String? title,
+    String? artist,
+    Uint8List? artwork,
+    bool autoPlay = true,
+  }) async {
+    await handler.playFromPath(
+      path,
+      title: title,
+      artist: artist,
+      artwork: artwork,
+      autoPlay: autoPlay,
     );
   }
 
