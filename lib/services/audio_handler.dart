@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -17,7 +16,12 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   bool shuffleEnabled = false;
   int repeatMode = 0;
   Duration get currentPosition => _player.position;
+  double get volume => _player.volume;
+  Stream<double> get volumeStream => _player.volumeStream;
 
+  Future<void> setVolume(double value) {
+    return _player.setVolume(value.clamp(0.0, 1.0));
+  }
 
   MeloraAudioHandler() {
     _player.playbackEventStream.listen((event) {
@@ -30,21 +34,15 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
 
     _player.durationStream.listen((duration) {
       final current = mediaItem.valueOrNull;
-
       if (current != null && duration != null) {
         mediaItem.add(current.copyWith(duration: duration));
       }
     });
   }
 
-  Stream<PlayerState> get playerStateStream =>
-      _player.playerStateStream;
-
-  Stream<Duration?> get durationStream =>
-      _player.durationStream;
-
-  Stream<Duration> get positionStream =>
-      _player.positionStream;
+  Stream<PlayerState> get playerStateStream => _player.playerStateStream;
+  Stream<Duration?> get durationStream => _player.durationStream;
+  Stream<Duration> get positionStream => _player.positionStream;
 
   Future<void> playFromPath(
     String path, {
@@ -59,7 +57,6 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
       final file = File(
         '${Directory.systemTemp.path}/melora_${path.hashCode}.jpg',
       );
-
       await file.writeAsBytes(artwork, flush: true);
       artworkUri = Uri.file(file.path);
     }
@@ -72,11 +69,9 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
     );
 
     await _player.setFilePath(path);
-
     mediaItem.add(item);
 
     final duration = _player.duration;
-
     if (duration != null) {
       mediaItem.add(item.copyWith(duration: duration));
     }
@@ -98,7 +93,6 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void _updatePlaybackState() {
     final playing = _player.playing;
-
     final repeatServiceMode = switch (repeatMode) {
       1 => AudioServiceRepeatMode.all,
       2 => AudioServiceRepeatMode.one,
@@ -155,9 +149,7 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() async {
-    await _player.play();
-  }
+  Future<void> play() => _player.play();
 
   @override
   Future<void> pause() => _player.pause();
@@ -169,9 +161,7 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> seek(Duration position) {
-    return _player.seek(position);
-  }
+  Future<void> seek(Duration position) => _player.seek(position);
 
   @override
   Future<void> skipToNext() async {
@@ -192,7 +182,6 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
       case 'toggleShuffle':
         await onShuffle?.call();
         break;
-
       case 'toggleRepeat':
         await onRepeat?.call();
         break;
