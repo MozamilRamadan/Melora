@@ -140,82 +140,79 @@ class PlayerScreen extends StatelessWidget {
 
                 const SizedBox(height: 25),
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              Row(
                   children: [
-                    IconButton(
-                      tooltip: 'Shuffle',
-                      onPressed: onShuffle,
-                      icon: Icon(
-                        Icons.shuffle,
-                        color: shuffleEnabled
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Shuffle',
+                        onPressed: onShuffle,
+                        icon: Icon(
+                          Icons.shuffle,
+                          color: shuffleEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
                       ),
                     ),
-
-                    const SizedBox(width: 12),
-
-                    IconButton(
-                      iconSize: 45,
-                      icon: const Icon(Icons.skip_previous),
-                      onPressed: onPrevious,
+                    Expanded(
+                      child: IconButton(
+                        iconSize: 32,
+                        onPressed: onPrevious,
+                        icon: const Icon(Icons.skip_previous),
+                      ),
                     ),
+                    Expanded(
+                      child: StreamBuilder<PlayerState>(
+                        stream: audioPlayer.playerStateStream,
+                        builder: (context, snapshot) {
+                          final isPlaying = snapshot.data?.playing ?? false;
 
-                    const SizedBox(width: 12),
-
-                    StreamBuilder<PlayerState>(
-                      stream: audioPlayer.playerStateStream,
-                      builder: (context, snapshot) {
-                        final isPlaying =
-                            snapshot.data?.playing ?? false;
-
-                        return IconButton(
-                          iconSize: 64,
-                          icon: Icon(
-                            isPlaying
-                                ? Icons.pause_circle
-                                : Icons.play_circle,
-                          ),
-                          onPressed: () {
-                            if (isPlaying) {
-                              audioPlayer.pause();
-                            } else {
-                              audioPlayer.handler.play();
-                            }
-                          },
-                        );
-                      },
+                          return IconButton(
+                            iconSize: 48,
+                            icon: Icon(
+                              isPlaying
+                                  ? Icons.pause_circle
+                                  : Icons.play_circle,
+                            ),
+                            onPressed: () {
+                              if (isPlaying) {
+                                audioPlayer.pause();
+                              } else {
+                                audioPlayer.handler.play();
+                              }
+                            },
+                          );
+                        },
+                      ),
                     ),
-
-                    const SizedBox(width: 12),
-
-                    IconButton(
-                      iconSize: 45,
-                      icon: const Icon(Icons.skip_next),
-                      onPressed: onNext,
+                    Expanded(
+                      child: IconButton(
+                        iconSize: 32,
+                        onPressed: onNext,
+                        icon: const Icon(Icons.skip_next),
+                      ),
                     ),
-
-                    const SizedBox(width: 12),
-
-                    IconButton(
-                      tooltip: switch (repeatMode) {
-                        1 => 'Repeat All',
-                        2 => 'Repeat One',
-                        _ => 'Repeat Off',
-                      },
-                      onPressed: onRepeat,
-                      icon: Icon(
-                        repeatMode == 2
-                            ? Icons.repeat_one
-                            : Icons.repeat,
-                        color: repeatMode == 0
-                            ? null
-                            : Theme.of(context).colorScheme.primary,
+                    Expanded(
+                      child: IconButton(
+                        tooltip: switch (repeatMode) {
+                          1 => 'Repeat All',
+                          2 => 'Repeat One',
+                          _ => 'Repeat Off',
+                        },
+                        onPressed: onRepeat,
+                        icon: Icon(
+                          repeatMode == 2
+                              ? Icons.repeat_one
+                              : Icons.repeat,
+                          color: repeatMode == 0
+                              ? null
+                              : Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                   ],
-                ),
+                )
+              
               ],
             ),
           );

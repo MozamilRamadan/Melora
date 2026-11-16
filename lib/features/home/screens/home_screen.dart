@@ -71,6 +71,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       _lastProcessingState = state.processingState;
     });
+
+    _audioPlayer.handler.onShuffle = () async {
+      _toggleShuffle();
+    };
+
+    _audioPlayer.handler.onRepeat = () async {
+      _toggleRepeat();
+    };
+
   }
 
   Future<void> _loadSongs() async {
@@ -292,9 +301,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _audioPlayer.handler.onNext = null;
     _audioPlayer.handler.onPrevious = null;
 
+    _audioPlayer.handler.onShuffle = null;
+    _audioPlayer.handler.onRepeat = null;
+    
     _audioPlayer.dispose();
     _currentSong.dispose();
-
     super.dispose();
   }
 

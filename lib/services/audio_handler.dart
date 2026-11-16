@@ -123,7 +123,7 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
           ),
           MediaControl.skipToNext,
         ],
-        androidCompactActionIndices: const [0, 2, 4],
+        androidCompactActionIndices: const [0, 1, 2],
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
