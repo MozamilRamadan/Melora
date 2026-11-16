@@ -398,7 +398,18 @@ Future<void> _loadSongs() async {
     return Scaffold(
       backgroundColor: AppStyle.backgroundColor,
       appBar: AppBar(
-        title: const Text('Melora'),
+        backgroundColor: AppStyle.backgroundColor,
+        elevation: 0,
+        centerTitle: false,
+        title: const Text(
+          'Melora',
+          style: TextStyle(
+            color: AppStyle.primaryColor,
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
       ),
       body: _buildBody(),
       bottomNavigationBar: ValueListenableBuilder<SongModel?>(
