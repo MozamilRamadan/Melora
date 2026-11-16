@@ -28,8 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late final AudioPlayerService _audioPlayer;
 
-  final ValueNotifier<SongModel?> _currentSong =
-      ValueNotifier(null);
+  final ValueNotifier<SongModel?> _currentSong = ValueNotifier(null);
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
 
@@ -58,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     _audioPlayer = AudioPlayerService(audioHandler);
-
     _audioPlayer.handler.onNext = _playNextSong;
     _audioPlayer.handler.onPrevious = _playPreviousSong;
 
@@ -99,10 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<SongModel> get _filteredSongs {
     final result = _songs.where((song) {
-      final matchesSearch =
-          song.title.toLowerCase().contains(
-                _searchQuery.toLowerCase(),
-              );
+      final matchesSearch = song.title
+          .toLowerCase()
+          .contains(_searchQuery.toLowerCase());
 
       final matchesFolder = _selectedFolder == 'All' ||
           song.folder == _selectedFolder;
@@ -135,12 +132,34 @@ class _HomeScreenState extends State<HomeScreen> {
       ..sort();
   }
 
+  // Called when the user selects a song from the list.
   Future<void> _playSong(SongModel song) async {
-    try {
-      // Queue follows the current folder/search selection.
-      final visibleSongs = _filteredSongs;
+    final visibleSongs = _filteredSongs;
 
-      _playQueue = List.from(visibleSongs);
+    if (visibleSongs.isEmpty) return;
+
+    _playQueue = List.from(visibleSongs);
+
+    if (_shuffleEnabled) {
+      _playQueue.shuffle();
+
+      // Keep the selected song at the beginning of the queue.
+      _playQueue.removeWhere((item) => item.id == song.id);
+      _playQueue.insert(0, song);
+    }
+
+    await _playQueueSong(song);
+  }
+
+  // Plays a song that already belongs to the current queue.
+  // Does not rebuild or shuffle the queue.
+  Future<void> _playQueueSong(SongModel song) async {
+    try {
+      final index = _playQueue.indexWhere(
+        (item) => item.id == song.id,
+      );
+
+      if (index == -1) return;
 
       await _audioPlayer.play(
         song.path,
@@ -153,10 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _currentSongId = song.id;
-
-        _queueIndex = _playQueue.indexWhere(
-          (item) => item.id == song.id,
-        );
+        _queueIndex = index;
       });
 
       _currentSong.value = song;
@@ -176,17 +192,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final nextIndex = (_queueIndex + 1) % _playQueue.length;
 
-    await _playSong(_playQueue[nextIndex]);
+    await _playQueueSong(_playQueue[nextIndex]);
   }
 
   Future<void> _playPreviousSong() async {
     if (_playQueue.isEmpty) return;
 
     final previousIndex =
-        (_queueIndex - 1 + _playQueue.length) %
-            _playQueue.length;
+        (_queueIndex - 1 + _playQueue.length) % _playQueue.length;
 
-    await _playSong(_playQueue[previousIndex]);
+    await _playQueueSong(_playQueue[previousIndex]);
   }
 
   Future<void> _handleSongCompleted() async {
@@ -196,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final currentSong = _currentSong.value;
 
       if (currentSong != null) {
-        await _playSong(currentSong);
+        await _playQueueSong(currentSong);
       }
 
       return;
@@ -207,33 +222,51 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // Repeat Off: stop at the end of the queue.
     if (_queueIndex < _playQueue.length - 1) {
       await _playNextSong();
     }
   }
 
   void _toggleShuffle() {
+    final visibleSongs = _filteredSongs;
+
     setState(() {
       _shuffleEnabled = !_shuffleEnabled;
 
       if (_shuffleEnabled) {
-        _playQueue = List.from(_songs)..shuffle();
+        _playQueue = List.from(visibleSongs);
+
+        final currentSong = _currentSong.value;
+
+        if (currentSong != null) {
+          _playQueue.removeWhere(
+            (song) => song.id == currentSong.id,
+          );
+
+          _playQueue.shuffle();
+          _playQueue.insert(0, currentSong);
+        } else {
+          _playQueue.shuffle();
+        }
       } else {
-        _playQueue = List.from(_songs);
+        _playQueue = List.from(visibleSongs);
       }
 
       _queueIndex = _playQueue.indexWhere(
         (song) => song.id == _currentSongId,
       );
     });
-  }
 
+    _audioPlayer.handler.setShuffleEnabled(_shuffleEnabled);
+  }
   void _toggleRepeat() {
     setState(() {
       _repeatMode = (_repeatMode + 1) % 3;
     });
-  }
 
+  _audioPlayer.handler.updateRepeatMode(_repeatMode);
+}
   void _openPlayerScreen() {
     Navigator.push(
       context,
@@ -243,6 +276,10 @@ class _HomeScreenState extends State<HomeScreen> {
           audioPlayer: _audioPlayer,
           onNext: _playNextSong,
           onPrevious: _playPreviousSong,
+          onShuffle: _toggleShuffle,
+          onRepeat: _toggleRepeat,
+          shuffleEnabled: _shuffleEnabled,
+          repeatMode: _repeatMode,
         ),
       ),
     );
@@ -306,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _isLoading = true;
                 });
+
                 _loadSongs();
               },
               child: const Text('Retry'),

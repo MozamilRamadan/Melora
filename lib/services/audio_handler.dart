@@ -2,13 +2,20 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
+
   Future<void> Function()? onNext;
   Future<void> Function()? onPrevious;
+  Future<void> Function()? onShuffle;
+  Future<void> Function()? onRepeat;
+
+  bool shuffleEnabled = false;
+  int repeatMode = 0;
 
   MeloraAudioHandler() {
     _player.playbackEventStream.listen((event) {
@@ -23,9 +30,7 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
       final current = mediaItem.valueOrNull;
 
       if (current != null && duration != null) {
-        mediaItem.add(
-          current.copyWith(duration: duration),
-        );
+        mediaItem.add(current.copyWith(duration: duration));
       }
     });
   }
@@ -39,8 +44,6 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<Duration> get positionStream =>
       _player.positionStream;
 
-
-  
   Future<void> playFromPath(
     String path, {
     String? title,
@@ -64,11 +67,10 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
       artist: artist ?? 'Unknown Artist',
       artUri: artworkUri,
     );
-    
-    mediaItem.add(null);
-    mediaItem.add(item);
 
     await _player.setFilePath(path);
+
+    mediaItem.add(item);
 
     final duration = _player.duration;
 
@@ -78,18 +80,50 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
 
     unawaited(_player.play());
   }
-    
+
+  void setShuffleEnabled(bool enabled) {
+    shuffleEnabled = enabled;
+    _updatePlaybackState();
+  }
+
+  void updateRepeatMode(int mode) {
+    repeatMode = mode;
+    _updatePlaybackState();
+  }
+
   void _updatePlaybackState() {
     final playing = _player.playing;
+
+    final repeatServiceMode = switch (repeatMode) {
+      1 => AudioServiceRepeatMode.all,
+      2 => AudioServiceRepeatMode.one,
+      _ => AudioServiceRepeatMode.none,
+    };
 
     playbackState.add(
       PlaybackState(
         controls: [
           MediaControl.skipToPrevious,
+          MediaControl.custom(
+            androidIcon: 'drawable/ic_shuffle',
+            label: shuffleEnabled ? 'Shuffle On' : 'Shuffle Off',
+            name: 'toggleShuffle',
+          ),
           if (playing) MediaControl.pause else MediaControl.play,
+          MediaControl.custom(
+            androidIcon: repeatMode == 2
+                ? 'drawable/ic_repeat_one'
+                : 'drawable/ic_repeat',
+            label: switch (repeatMode) {
+              1 => 'Repeat All',
+              2 => 'Repeat One',
+              _ => 'Repeat Off',
+            },
+            name: 'toggleRepeat',
+          ),
           MediaControl.skipToNext,
         ],
-        androidCompactActionIndices: const [0, 1, 2],
+        androidCompactActionIndices: const [0, 2, 4],
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
@@ -107,13 +141,17 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
         bufferedPosition: _player.bufferedPosition,
         updateTime: DateTime.now(),
         speed: _player.speed,
+        shuffleMode: shuffleEnabled
+            ? AudioServiceShuffleMode.all
+            : AudioServiceShuffleMode.none,
+        repeatMode: repeatServiceMode,
       ),
     );
   }
-    
+
   @override
   Future<void> play() async {
-    unawaited(_player.play());
+    await _player.play();
   }
 
   @override
@@ -129,14 +167,30 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> seek(Duration position) {
     return _player.seek(position);
   }
-@override
-Future<void> skipToNext() async {
-  await onNext?.call();
-}
 
-@override
-Future<void> skipToPrevious() async {
-  await onPrevious?.call();
-}
+  @override
+  Future<void> skipToNext() async {
+    await onNext?.call();
+  }
 
+  @override
+  Future<void> skipToPrevious() async {
+    await onPrevious?.call();
+  }
+
+  @override
+  Future<dynamic> customAction(
+    String name, [
+    Map<String, dynamic>? extras,
+  ]) async {
+    switch (name) {
+      case 'toggleShuffle':
+        await onShuffle?.call();
+        break;
+
+      case 'toggleRepeat':
+        await onRepeat?.call();
+        break;
+    }
+  }
 }
