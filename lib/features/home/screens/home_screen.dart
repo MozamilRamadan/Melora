@@ -90,28 +90,86 @@ class _HomeScreenState extends State<HomeScreen> {
 
   }
 
-  Future<void> _loadSongs() async {
-    try {
-      final songs = await _musicScanner.getSong();
+Future<void> _loadSongs() async {
+  try {
+    final songs = await _musicScanner.getSong();
+    final savedState = await _storage.loadPlaybackState();
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      setState(() {
-        _songs = songs;
-        _playQueue = List.from(songs);
-        _isLoading = false;
-        _error = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
+    final songsById = {
+      for (final song in songs) song.id: song,
+    };
 
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+    final savedQueueIds = savedState['queue'] as List<int>;
+
+    final restoredQueue = savedQueueIds
+        .map((id) => songsById[id])
+        .whereType<SongModel>()
+        .toList();
+
+    final savedSongId = savedState['songId'] as int?;
+    final restoredSong =
+        savedSongId == null ? null : songsById[savedSongId];
+
+    if (restoredSong != null &&
+        !restoredQueue.any((song) => song.id == restoredSong.id)) {
+      restoredQueue.insert(0, restoredSong);
     }
-  }
 
+    if (restoredQueue.isEmpty) {
+      restoredQueue.addAll(songs);
+    }
+
+    final restoredShuffle =
+        savedState['shuffleEnabled'] as bool;
+
+    final savedRepeatMode = savedState['repeatMode'] as int;
+    final restoredRepeatMode =
+        savedRepeatMode >= 0 && savedRepeatMode <= 2
+            ? savedRepeatMode
+            : 0;
+
+    setState(() {
+      _songs = songs;
+      _playQueue = restoredQueue;
+      _currentSongId = restoredSong?.id;
+      _queueIndex = restoredSong == null
+          ? -1
+          : restoredQueue.indexWhere(
+              (song) => song.id == restoredSong.id,
+            );
+      _shuffleEnabled = restoredShuffle;
+      _repeatMode = restoredRepeatMode;
+      _currentSong.value = restoredSong;
+      _isLoading = false;
+      _error = null;
+    });
+
+    audioHandler.setShuffleEnabled(restoredShuffle);
+    audioHandler.updateRepeatMode(restoredRepeatMode);
+
+    if (restoredSong != null) {
+      final savedPosition = savedState['position'] as int;
+
+      await _audioPlayer.restoreSong(
+        restoredSong.path,
+        title: restoredSong.title,
+        artist: restoredSong.artist,
+        position: Duration(
+          milliseconds: savedPosition > 0 ? savedPosition : 0,
+        ),
+      );
+    }
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _error = e.toString();
+      _isLoading = false;
+    });
+  }
+}
   List<SongModel> get _filteredSongs {
     final result = _songs.where((song) {
       final matchesSearch = song.title

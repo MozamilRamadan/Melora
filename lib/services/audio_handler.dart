@@ -81,7 +81,9 @@ class MeloraAudioHandler extends BaseAudioHandler with SeekHandler {
       mediaItem.add(item.copyWith(duration: duration));
     }
 
-    unawaited(_player.play());
+    if (autoPlay) {
+      unawaited(_player.play());
+    }
   }
 
   void setShuffleEnabled(bool enabled) {

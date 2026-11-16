@@ -2,15 +2,21 @@
 import 'package:on_audio_query/on_audio_query.dart' hide SongModel;
 import '../data/models/song_model.dart';
 import 'dart:io';
-
+import 'artwork_cache_service.dart';
 class MusicScannerService {
   final OnAudioQuery _audioQuery = OnAudioQuery();
+  final ArtworkCacheService _artworkCache = ArtworkCacheService();
+  List<SongModel>? _cachedSongs;
 
   Future<List<SongModel>> getSong() async {
     final hasPermission = await _audioQuery.permissionsStatus();
 
     if (!hasPermission) {
       throw Exception('Music permission not granted');
+    }
+
+    if (_cachedSongs != null) {
+      return _cachedSongs!;
     }
 
     final songs = await _audioQuery.querySongs(
@@ -22,18 +28,21 @@ class MusicScannerService {
 
     final result = <SongModel>[];
 
-for (final song in songs) {
-  if (song.isMusic != true ||
-      song.data.isEmpty ||
-      (song.duration ?? 0) <= 0) {
-    continue;
-  }
+    for (final song in songs) {
+      if (song.isMusic != true ||
+          song.data.isEmpty ||
+          (song.duration ?? 0) <= 0) {
+        continue;
+      }
 
-    final artwork = await _audioQuery.queryArtwork(
+  final artwork = await _artworkCache.getArtwork(
+    songId: song.id,
+    loader: () => _audioQuery.queryArtwork(
       song.id,
       ArtworkType.AUDIO,
       size: 500,
-    );
+    ),
+  );
 
     result.add(
       SongModel(
@@ -49,6 +58,12 @@ for (final song in songs) {
     );
   }
 
+  _cachedSongs = result;
   return result;
   }
+
+  void clearCache() {
+    _cachedSongs = null;
+  }
+  
 }
