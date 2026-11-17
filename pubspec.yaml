@@ -1,5 +1,6 @@
+
 name: music_player
-description: "A new Flutter project."
+description: "Melora - Premium Music Player"
 
 version: 1.0.0+1
 
@@ -23,7 +24,13 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
-
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/melora_app_icon.png"
+  min_sdk_android: 21

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:music_player/core/theme/app_style.dart';
 import 'package:music_player/data/models/song_model.dart';
+import 'package:music_player/features/about/screens/about_screen.dart';
 import 'package:music_player/features/favorites/screens/favorites_screen.dart';
 import 'package:music_player/features/home/controllers/home_controller.dart';
 import 'package:music_player/features/home/widgets/home_app_bar.dart';
@@ -117,6 +118,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openAboutScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AboutScreen(),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -134,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: HomeAppBar(
         onPlaylistsTap: _openPlaylistsScreen,
         onFavoritesTap: _openFavoritesScreen,
+        onAboutTap: _openAboutScreen,
       ),
 
       body: AnimatedBuilder(
@@ -157,8 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
 
-      bottomNavigationBar:
-          ValueListenableBuilder<SongModel?>(
+      bottomNavigationBar: ValueListenableBuilder<SongModel?>(
         valueListenable: _controller.currentSong,
         builder: (context, song, child) {
           return MiniPlayer(
