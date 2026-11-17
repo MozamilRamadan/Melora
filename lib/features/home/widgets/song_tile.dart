@@ -73,6 +73,7 @@ class SongTile extends StatelessWidget {
                           )
                         : _ArtworkFallback(isPlaying: isPlaying),
                   ),
+                  
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -155,7 +156,7 @@ class _ArtworkFallback extends StatelessWidget {
       alignment: Alignment.center,
       child: Icon(
         Icons.music_note_rounded,
-        color: isPlaying ? AppStyle.goldColor : AppStyle.purpleColor,
+        color: isPlaying ? AppStyle.goldColor : AppStyle.goldLightColor,
         size: 28,
       ),
     );
