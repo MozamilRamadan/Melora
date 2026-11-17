@@ -1,438 +1,179 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:music_player/services/playback_storage_service.dart';
+
 import 'package:music_player/core/theme/app_style.dart';
 import 'package:music_player/data/models/song_model.dart';
-import 'package:music_player/services/music_scanner_service.dart';
-import 'package:music_player/services/audio_player_service.dart';
-import 'package:music_player/features/player/screens/player_screen.dart';
-import 'package:music_player/features/home/widgets/search_bar.dart';
-import 'package:music_player/features/home/widgets/sort_button.dart';
-import 'package:music_player/features/home/widgets/song_tile.dart';
-import 'package:music_player/features/home/widgets/mini_player.dart';
-import 'package:music_player/features/home/widgets/folder_filter.dart';
-import 'package:music_player/services/favorites_service.dart';
 import 'package:music_player/features/favorites/screens/favorites_screen.dart';
-import 'package:music_player/services/playlists_service.dart';
+import 'package:music_player/features/home/controllers/home_controller.dart';
+import 'package:music_player/features/home/widgets/home_app_bar.dart';
+import 'package:music_player/features/home/widgets/home_content.dart';
+import 'package:music_player/features/home/widgets/mini_player.dart';
+import 'package:music_player/features/player/screens/player_screen.dart';
 import 'package:music_player/features/playlists/screens/playlists_screen.dart';
 import 'package:music_player/main.dart';
+import 'package:music_player/services/favorites_service.dart';
+import 'package:music_player/services/playlists_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final MusicScannerService _musicScanner = MusicScannerService();
-  final PlaybackStorageService _storage = PlaybackStorageService();
   final FavoritesService _favorites = FavoritesService();
   final PlaylistsService _playlists = PlaylistsService();
-  Timer? _playbackSaveTimer;
-  late final AudioPlayerService _audioPlayer;
-  final ValueNotifier<SongModel?> _currentSong = ValueNotifier(null);
-  StreamSubscription<PlayerState>? _playerStateSubscription;
-  List<SongModel> _songs = [];
-  List<SongModel> _playQueue = [];
-  String _searchQuery = '';
-  String _selectedFolder = 'All';
-  String _selectedSort = 'title';
-  bool _isLoading = true;
-  bool _shuffleEnabled = false;
-  String? _error;
-  int? _currentSongId;
-  int _queueIndex = -1;
-  int _repeatMode = 0;
-  ProcessingState? _lastProcessingState;
+
+  late final HomeController _controller;
 
   @override
   void initState() {
     super.initState();
+
     _favorites.load();
     _playlists.load();
-    _audioPlayer = AudioPlayerService(audioHandler);
-    _audioPlayer.handler.onNext = _playNextSong;
-    _audioPlayer.handler.onPrevious = _playPreviousSong;
-    _loadSongs();
-    _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed &&
-          _lastProcessingState != ProcessingState.completed)
-        _handleSongCompleted();
-      _lastProcessingState = state.processingState;
-    });
-    _audioPlayer.handler.onShuffle = () async => _toggleShuffle();
-    _audioPlayer.handler.onRepeat = () async => _toggleRepeat();
-    _playbackSaveTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _savePlaybackState(),
+
+    _controller = HomeController(audioHandler);
+    _controller.loadSongs();
+  }
+
+  Future<void> _handlePlaySong(SongModel song) async {
+    try {
+      await _controller.playSong(song);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to play song: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handlePlayPlaylist(List<SongModel> songs) async {
+    try {
+      await _controller.playPlaylist(songs);
+
+      if (!mounted) return;
+
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to play playlist: $e'),
+        ),
+      );
+    }
+  }
+
+  void _openPlayerScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlayerScreen(
+          currentSong: _controller.currentSong,
+          audioPlayer: _controller.audioPlayer,
+          onNext: _controller.playNextSong,
+          onPrevious: _controller.playPreviousSong,
+          onShuffle: _controller.toggleShuffle,
+          onRepeat: _controller.toggleRepeat,
+          shuffleEnabled: _controller.shuffleEnabled,
+          repeatMode: _controller.repeatMode,
+        ),
+      ),
     );
   }
 
-  Future<void> _loadSongs() async {
-    try {
-      final songs = await _musicScanner.getSong();
-      final savedState = await _storage.loadPlaybackState();
-      if (!mounted) return;
-      final songsById = {for (final song in songs) song.id: song};
-      final savedQueueIds = savedState['queue'] as List<int>;
-      final restoredQueue = savedQueueIds
-          .map((id) => songsById[id])
-          .whereType<SongModel>()
-          .toList();
-      final savedSongId = savedState['songId'] as int?;
-      final restoredSong = savedSongId == null ? null : songsById[savedSongId];
-      if (restoredSong != null &&
-          !restoredQueue.any((song) => song.id == restoredSong.id))
-        restoredQueue.insert(0, restoredSong);
-      if (restoredQueue.isEmpty) restoredQueue.addAll(songs);
-      final restoredShuffle = savedState['shuffleEnabled'] as bool;
-      final savedRepeatMode = savedState['repeatMode'] as int;
-      final restoredRepeatMode = savedRepeatMode >= 0 && savedRepeatMode <= 2
-          ? savedRepeatMode
-          : 0;
-      setState(() {
-        _songs = songs;
-        _playQueue = restoredQueue;
-        _currentSongId = restoredSong?.id;
-        _queueIndex = restoredSong == null
-            ? -1
-            : restoredQueue.indexWhere((song) => song.id == restoredSong.id);
-        _shuffleEnabled = restoredShuffle;
-        _repeatMode = restoredRepeatMode;
-        _currentSong.value = restoredSong;
-        _isLoading = false;
-        _error = null;
-      });
-      audioHandler.setShuffleEnabled(restoredShuffle);
-      audioHandler.updateRepeatMode(restoredRepeatMode);
-      if (restoredSong != null) {
-        final savedPosition = savedState['position'] as int;
-        await _audioPlayer.restoreSong(
-          restoredSong.path,
-          title: restoredSong.title,
-          artist: restoredSong.artist,
-          position: Duration(
-            milliseconds: savedPosition > 0 ? savedPosition : 0,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
-  }
-
-  List<SongModel> get _filteredSongs {
-    final result = _songs.where((song) {
-      final matchesSearch = song.title.toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      );
-      final matchesFolder =
-          _selectedFolder == 'All' || song.folder == _selectedFolder;
-      return matchesSearch && matchesFolder;
-    }).toList();
-    switch (_selectedSort) {
-      case 'duration':
-        result.sort((a, b) => a.duration.compareTo(b.duration));
-        break;
-      default:
-        result.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
-    }
-    return result;
-  }
-
-  List<String> get _folders =>
-      _songs.map((song) => song.folder).toSet().toList()..sort();
-
-  Future<void> _playSong(SongModel song) async {
-    final visibleSongs = _filteredSongs;
-    if (visibleSongs.isEmpty) return;
-    _playQueue = List.from(visibleSongs);
-    if (_shuffleEnabled) {
-      _playQueue.shuffle();
-      _playQueue.removeWhere((item) => item.id == song.id);
-      _playQueue.insert(0, song);
-    }
-    await _playQueueSong(song);
-  }
-
-  Future<void> _playPlaylist(List<SongModel> songs) async {
-    if (songs.isEmpty) return;
-    _playQueue = List<SongModel>.from(songs);
-    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
-    await _playQueueSong(_playQueue.first);
-  }
-
-  Future<void> _playQueueSong(SongModel song) async {
-    try {
-      final index = _playQueue.indexWhere((item) => item.id == song.id);
-      if (index == -1) return;
-      await _audioPlayer.play(
-        song.path,
-        title: song.title,
-        artist: song.artist,
-        artwork: song.artwork,
-      );
-      if (!mounted) return;
-      setState(() {
-        _currentSongId = song.id;
-        _queueIndex = index;
-      });
-      _currentSong.value = song;
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Unable to play song: $e')));
-    }
-  }
-
-  Future<void> _playNextSong() async {
-    if (_playQueue.isEmpty) return;
-    final nextIndex = (_queueIndex + 1) % _playQueue.length;
-    await _playQueueSong(_playQueue[nextIndex]);
-  }
-
-  Future<void> _playPreviousSong() async {
-    if (_playQueue.isEmpty) return;
-    final previousIndex =
-        (_queueIndex - 1 + _playQueue.length) % _playQueue.length;
-    await _playQueueSong(_playQueue[previousIndex]);
-  }
-
-  Future<void> _handleSongCompleted() async {
-    if (_currentSongId == null || _playQueue.isEmpty) return;
-    if (_repeatMode == 2) {
-      final currentSong = _currentSong.value;
-      if (currentSong != null) await _playQueueSong(currentSong);
-      return;
-    }
-    if (_repeatMode == 1) {
-      await _playNextSong();
-      return;
-    }
-    if (_queueIndex < _playQueue.length - 1) await _playNextSong();
-  }
-
-  void _toggleShuffle() {
-    final visibleSongs = _filteredSongs;
-    setState(() {
-      _shuffleEnabled = !_shuffleEnabled;
-      if (_shuffleEnabled) {
-        _playQueue = List.from(visibleSongs);
-        final currentSong = _currentSong.value;
-        if (currentSong != null) {
-          _playQueue.removeWhere((song) => song.id == currentSong.id);
-          _playQueue.shuffle();
-          _playQueue.insert(0, currentSong);
-        } else {
-          _playQueue.shuffle();
-        }
-      } else {
-        _playQueue = List.from(visibleSongs);
-      }
-      _queueIndex = _playQueue.indexWhere((song) => song.id == _currentSongId);
-    });
-    _audioPlayer.handler.setShuffleEnabled(_shuffleEnabled);
-  }
-
-  void _toggleRepeat() {
-    setState(() => _repeatMode = (_repeatMode + 1) % 3);
-    _audioPlayer.handler.updateRepeatMode(_repeatMode);
-  }
-
-  void _openPlayerScreen() => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PlayerScreen(
-        currentSong: _currentSong,
-        audioPlayer: _audioPlayer,
-        onNext: _playNextSong,
-        onPrevious: _playPreviousSong,
-        onShuffle: _toggleShuffle,
-        onRepeat: _toggleRepeat,
-        shuffleEnabled: _shuffleEnabled,
-        repeatMode: _repeatMode,
+  void _openFavoritesScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FavoritesScreen(
+          songs: _controller.songs,
+          favorites: _favorites,
+          onPlaySong: (song) {
+            Navigator.pop(context);
+            _handlePlaySong(song);
+          },
+        ),
       ),
-    ),
-  );
+    );
+  }
 
-  void _openFavoritesScreen() => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => FavoritesScreen(
-        songs: _songs,
-        favorites: _favorites,
-        onPlaySong: (song) {
-          Navigator.pop(context);
-          _playSong(song);
-        },
+  void _openPlaylistsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlaylistsScreen(
+          songs: _controller.songs,
+          playlists: _playlists,
+          onPlayPlaylist: _handlePlayPlaylist,
+        ),
       ),
-    ),
-  );
-
-  void _openPlaylistsScreen() => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PlaylistsScreen(
-        songs: _songs,
-        playlists: _playlists,
-        onPlayPlaylist: _playPlaylist,
-      ),
-    ),
-  );
-
-  Future<void> _savePlaybackState() async {
-    if (_currentSongId == null || _playQueue.isEmpty) return;
-    await _storage.savePlaybackState(
-      songId: _currentSongId,
-      position: _audioPlayer.currentPosition.inMilliseconds,
-      queue: _playQueue.map((song) => song.id).toList(),
-      shuffleEnabled: _shuffleEnabled,
-      repeatMode: _repeatMode,
     );
   }
 
   @override
   void dispose() {
-    _playerStateSubscription?.cancel();
-    _audioPlayer.handler.onNext = null;
-    _audioPlayer.handler.onPrevious = null;
-    _audioPlayer.handler.onShuffle = null;
-    _audioPlayer.handler.onRepeat = null;
-    _audioPlayer.dispose();
-    _currentSong.dispose();
-    _playbackSaveTimer?.cancel();
-    _savePlaybackState();
+    _controller.dispose();
     _favorites.dispose();
     _playlists.dispose();
+
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppStyle.backgroundColor,
-    appBar: AppBar(
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: AppStyle.backgroundColor,
-      elevation: 0,
-      centerTitle: false,
-      title: const Text(
-        'Melora',
-        style: TextStyle(
-          color: AppStyle.primaryColor,
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-        ),
-      ),
-      actions: [
-        IconButton(
-          tooltip: 'Playlists',
-          onPressed: _openPlaylistsScreen,
-          icon: const Icon(Icons.queue_music_rounded),
-          color: AppStyle.goldColor,
-        ),
-        IconButton(
-          tooltip: 'Favorites',
-          onPressed: _openFavoritesScreen,
-          icon: const Icon(Icons.favorite_rounded),
-          color: AppStyle.goldColor,
-        ),
-      ],
-    ),
-    body: _buildBody(),
-    bottomNavigationBar: ValueListenableBuilder<SongModel?>(
-      valueListenable: _currentSong,
-      builder: (context, song, child) => MiniPlayer(
-        currentSong: song,
-        audioPlayer: _audioPlayer,
-        onNext: _playNextSong,
-        onPrevious: _playPreviousSong,
-        onOpenPlayer: _openPlayerScreen,
-        onShuffle: _toggleShuffle,
-        onRepeat: _toggleRepeat,
-        shuffleEnabled: _shuffleEnabled,
-        repeatMode: _repeatMode,
-      ),
-    ),
-  );
 
-  Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(_error!),
-            ElevatedButton(
-              onPressed: () {
-                setState(() => _isLoading = true);
-                _loadSongs();
-              },
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    if (_songs.isEmpty) return const Center(child: Text('No music found'));
-    final visibleSongs = _filteredSongs;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(AppStyle.mediumSpacing),
-          child: SearchBarWidget(
-            onChanged: (value) => setState(() => _searchQuery = value),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppStyle.mediumSpacing,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: FolderFilter(
-                  folders: _folders,
-                  selectedFolder: _selectedFolder,
-                  onChanged: (value) => setState(() => _selectedFolder = value),
-                ),
-              ),
-              SortButton(
-                selectedSort: _selectedSort,
-                onSortChanged: (value) => setState(() => _selectedSort = value),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: visibleSongs.isEmpty
-              ? const Center(child: Text('No matching songs'))
-              : AnimatedBuilder(
-                  animation: _favorites,
-                  builder: (context, child) => ListView.builder(
-                    itemCount: visibleSongs.length,
-                    itemBuilder: (context, index) {
-                      final song = visibleSongs[index];
-                      return SongTile(
-                        song: song,
-                        index: index,
-                        isPlaying: song.id == _currentSongId,
-                        onTap: () => _playSong(song),
-                        isFavorite: _favorites.isFavorite(song.id),
-                        onFavoriteTap: () => _favorites.toggle(song.id),
-                      );
-                    },
-                  ),
-                ),
-        ),
-      ],
+      appBar: HomeAppBar(
+        onPlaylistsTap: _openPlaylistsScreen,
+        onFavoritesTap: _openFavoritesScreen,
+      ),
+
+      body: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return HomeContent(
+            isLoading: _controller.isLoading,
+            error: _controller.error,
+            songs: _controller.filteredSongs,
+            folders: _controller.folders,
+            selectedFolder: _controller.selectedFolder,
+            selectedSort: _controller.selectedSort,
+            favorites: _favorites,
+            currentSongId: _controller.currentSongId,
+            onSearchChanged: _controller.updateSearch,
+            onFolderChanged: _controller.updateFolder,
+            onSortChanged: _controller.updateSort,
+            onSongTap: _handlePlaySong,
+            onRetry: _controller.loadSongs,
+          );
+        },
+      ),
+
+      bottomNavigationBar:
+          ValueListenableBuilder<SongModel?>(
+        valueListenable: _controller.currentSong,
+        builder: (context, song, child) {
+          return MiniPlayer(
+            currentSong: song,
+            audioPlayer: _controller.audioPlayer,
+            onNext: _controller.playNextSong,
+            onPrevious: _controller.playPreviousSong,
+            onOpenPlayer: _openPlayerScreen,
+            onShuffle: _controller.toggleShuffle,
+            onRepeat: _controller.toggleRepeat,
+            shuffleEnabled: _controller.shuffleEnabled,
+            repeatMode: _controller.repeatMode,
+          );
+        },
+      ),
     );
   }
 }
