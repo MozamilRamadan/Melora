@@ -366,7 +366,20 @@ class _PlaylistDetail extends StatelessWidget {
                               color: AppStyle.secondaryTextColor,
                             ),
                           ),
-                          onTap: () => onPlay(current),
+                          onTap: () {
+                            final startIndex = current.indexWhere(
+                              (item) => item.id == song.id,
+                            );
+
+                            if (startIndex < 0) return;
+
+                            final queue = [
+                              ...current.skip(startIndex),
+                              ...current.take(startIndex),
+                            ];
+
+                            onPlay(queue);
+                          },
                           trailing: IconButton(
                             icon: const Icon(Icons.remove_circle_outline),
                             color: AppStyle.secondaryTextColor,
