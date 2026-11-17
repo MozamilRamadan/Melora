@@ -1,9 +1,8 @@
 
 import 'dart:async';
-
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-
 import 'package:music_player/data/models/song_model.dart';
 import 'package:music_player/services/audio_handler.dart';
 import 'package:music_player/services/audio_player_service.dart';
@@ -233,6 +232,8 @@ class HomeController extends ChangeNotifier {
       );
 
       if (index == -1) return;
+
+      await Permission.notification.request();
 
       await audioPlayer.play(
         song.path,
