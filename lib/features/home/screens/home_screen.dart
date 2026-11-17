@@ -1,6 +1,7 @@
 
 import 'dart:async';
-
+import 'package:music_player/services/favorites_service.dart';
+import 'package:music_player/features/favorites/screens/favorites_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:music_player/services/playback_storage_service.dart';
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final AudioPlayerService _audioPlayer;
 
   final ValueNotifier<SongModel?> _currentSong = ValueNotifier(null);
+  final FavoritesService _favorites = FavoritesService();
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
 
@@ -58,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-
+    _favorites.load();
     _audioPlayer = AudioPlayerService(audioHandler);
     _audioPlayer.handler.onNext = _playNextSong;
     _audioPlayer.handler.onPrevious = _playPreviousSong;
@@ -374,6 +376,21 @@ Future<void> _loadSongs() async {
       repeatMode: _repeatMode,
     );
   }
+  void _openFavoritesScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FavoritesScreen(
+          songs: _songs,
+          favorites: _favorites,
+          onPlaySong: (song) {
+            Navigator.pop(context);
+            _playSong(song);
+          },
+        ),
+      ),
+    );
+  }
 
 
   @override
@@ -390,6 +407,7 @@ Future<void> _loadSongs() async {
     _currentSong.dispose();
     _playbackSaveTimer?.cancel();
     unawaited(_savePlaybackState());
+    _favorites.dispose();
     super.dispose();
   }
 
@@ -410,6 +428,14 @@ Future<void> _loadSongs() async {
             letterSpacing: 1.5,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Favorites',
+            onPressed: _openFavoritesScreen,
+            icon: const Icon(Icons.favorite_rounded),
+            color: AppStyle.goldColor,
+          ),
+        ],
       ),
       body: _buildBody(),
       bottomNavigationBar: ValueListenableBuilder<SongModel?>(
@@ -514,7 +540,7 @@ Future<void> _loadSongs() async {
               ? const Center(
                   child: Text('No matching songs'),
                 )
-              : ListView.builder(
+              : AnimatedBuilder(animation: _favorites, builder: (context, child) =>  ListView.builder(
                   itemCount: visibleSongs.length,
                   itemBuilder: (context, index) {
                     final song = visibleSongs[index];
@@ -524,10 +550,13 @@ Future<void> _loadSongs() async {
                       index: index,
                       isPlaying: song.id == _currentSongId,
                       onTap: () => _playSong(song),
+                      isFavorite: _favorites.isFavorite(song.id),
+                      onFavoriteTap: () => _favorites.toggle(song.id),
                     );
                   },
                 ),
         ),
+        )
       ],
     );
   }

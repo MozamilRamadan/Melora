@@ -7,13 +7,16 @@ class SongTile extends StatelessWidget {
   final int index;
   final bool isPlaying;
   final VoidCallback onTap;
-
+  final bool isFavorite;
+  final VoidCallback onFavoriteTap;
   const SongTile({
     super.key,
     required this.song,
     required this.index,
     required this.isPlaying,
     required this.onTap,
+    required this.isFavorite,
+    required this.onFavoriteTap
   });
 
   String _formatDuration(int milliseconds) {
@@ -113,7 +116,19 @@ class SongTile extends StatelessWidget {
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-                const SizedBox(width: 8),
+                
+                IconButton(
+                  tooltip: isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  padding: EdgeInsets.zero,
+                  onPressed: onFavoriteTap,
+                  icon: Icon(
+                    isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    color: isFavorite ? AppStyle.goldColor : AppStyle.secondaryTextColor,
+                    size: 19,
+                  ),
+                ),
                 Icon(
                   isPlaying ? Icons.graphic_eq_rounded : Icons.play_arrow_rounded,
                   color: accent,
